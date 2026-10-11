@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>國王與奴隸•平民起義</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang HK","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  background:radial-gradient(ellipse at 50% 0%,#1c4a2e 0%,#0a1a10 70%);
+  color:#eaeaea;overflow-x:hidden;
+}
+.hidden{display:none!important}
+
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.loginbox{width:100%;max-width:340px;text-align:center}
+.loginbox h1{font-size:26px;margin:0 0 6px;letter-spacing:2px}
+.tagline{color:#8fbf9c;font-size:13px;margin-bottom:26px;letter-spacing:1px}
+.loginbox input{width:100%;padding:14px 16px;margin-bottom:12px;border-radius:10px;border:1px solid #2e5c3e;background:#0f2418;color:#fff;font-size:16px;outline:none}
+.loginbox input:focus{border-color:#4caf7d}
+.btn{width:100%;padding:14px;border-radius:10px;border:1px solid #2e5c3e;background:#16301f;color:#d8f0e0;font-size:16px;font-weight:600;margin-bottom:10px;cursor:pointer;transition:.15s;font-family:inherit}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:linear-gradient(180deg,#2e9c5c,#1f7645);border-color:#3fb872;color:#fff}
+.msg{min-height:20px;font-size:13px;color:#ffb4b4;margin-top:8px;line-height:1.5}
+
+#gameScreen{
+  display:grid;
+  grid-template-columns: minmax(150px,190px) 1fr minmax(190px,250px);
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "header header header"
+    "players mainArea stats"
+    "log log log";
+  gap: 8px;
+  padding: 8px;
+  height: 100vh;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+header{grid-area:header;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#9fc9ad;padding:0 4px;flex-wrap:wrap;gap:6px}
+.roomtag b{color:#ffd54a}
+.badge{background:#7a1f1f;color:#ffd0d0;padding:3px 8px;border-radius:20px;font-size:11px;margin-right:6px;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.55}}
+.mini{background:#23392b;color:#a8c9b5;border:1px solid #2e5c3e;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+
+#players{grid-area:players;display:flex;flex-direction:column;gap:6px;overflow-y:auto;min-width:0;padding-right:2px}
+.pcard{background:#12261a;border:1px solid #23412f;border-radius:10px;padding:6px 8px;text-align:center;font-size:12px;transition:.2s;position:relative;width:100%}
+.pcard.turn{border-color:#ffd54a;box-shadow:0 0 12px rgba(255,213,74,.55);background:#1b3524}
+.pcard.me{border-color:#4caf7d}
+.pcard.dead{opacity:.4}
+.pcard .pn{font-weight:700;color:#e8f5ec;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcard .pi{font-size:11px;color:#8fbf9c;margin-top:2px;white-space:nowrap}
+.pcard .pc{font-size:11px;color:#6f9c80}
+.hosttag{background:#3a2f10;color:#ffd54a;font-size:9px;padding:0 3px;border-radius:3px;vertical-align:1px}
+
+#mainArea{grid-area:mainArea;display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0;overflow:hidden}
+#center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:0;background:#0b1a11;border:1px solid #1d3b28;border-radius:10px;padding:10px;overflow:hidden}
+#lastPlayArea{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;min-height:56px;align-items:center}
+#comboLabel{font-size:13px;color:#ffd54a;letter-spacing:1px;min-height:16px}
+#centerMsg{font-size:13px;color:#9fc9ad;text-align:center;min-height:18px}
+
+#myArea{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+#myInfo{font-size:13px;color:#9fc9ad;text-align:center}
+#myInfo b{color:#ffd54a}
+#myHand{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;min-height:66px;align-items:flex-end;padding:4px 0}
+#actions{display:flex;gap:8px;justify-content:center;align-items:center;min-height:46px}
+#actions button{flex:1;max-width:200px;padding:12px;border-radius:10px;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+#actions button:disabled{opacity:.35;cursor:not-allowed}
+#actions .primary{background:linear-gradient(180deg,#2e9c5c,#1f7645);color:#fff}
+#actions .ghost{background:#23392b;color:#a8c9b5;border:1px solid #2e5c3e}
+.waiting{color:#6f9c80;font-size:13px}
+
+#statsArea{grid-area:stats;display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}
+.statBox{flex:1 1 0;min-height:0;background:#0b1a11;border:1px solid #1d3b28;border-radius:8px;padding:6px 8px;overflow-y:auto}
+.statTitle{color:#ffd54a;font-size:11px;letter-spacing:1px;margin-bottom:4px;font-weight:700;position:sticky;top:0;background:#0b1a11;padding:2px 0}
+.scoreRow{display:flex;justify-content:space-between;align-items:center;padding:3px 2px;border-bottom:1px solid #14291b;font-size:12px;gap:6px}
+.scoreRow:last-child{border-bottom:none}
+.scoreRow .nm{color:#c9e3d1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.scoreRow .sc{color:#ffd54a;font-weight:800;font-variant-numeric:tabular-nums}
+.scoreRow.gold .sc{color:#ffd54a}
+.scoreRow.silver .sc{color:#e0e0e0}
+.scoreRow.bronze .sc{color:#d29a5c}
+.histRow{color:#86a891;padding:4px 2px;border-bottom:1px solid #14291b;line-height:1.5;font-size:11.5px;word-break:break-all}
+.histRow:last-child{border-bottom:none}
+.histRow .hr{color:#ffd54a;font-weight:700}
+.histRow .hp{color:#c9e3d1;margin-left:4px}
+.histRow .hp i{font-style:normal;color:#6f9c80;font-size:10.5px;margin-left:1px}
+.emptyHist{color:#4a6a56;font-size:11.5px;text-align:center;padding:6px 0}
+
+#logBox{grid-area:log;max-height:74px;overflow-y:auto;font-size:12px;color:#86a891;background:#0b1a11;border-radius:8px;padding:8px 10px;line-height:1.65;border:1px solid #1d3b28}
+#logBox div{border-bottom:1px solid #14291b;padding:2px 0}
+#logBox div:last-child{border-bottom:none}
+
+.card{width:44px;height:62px;border-radius:6px;background:#fdfdfd;color:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;user-select:none;border:2px solid transparent;transition:transform .12s,box-shadow .12s;flex:0 0 auto;box-shadow:0 2px 4px rgba(0,0,0,.45)}
+.card .r{font-size:16px;line-height:1.05}
+.card .s{font-size:13px;line-height:1.05}
+.card.red{color:#d32f2f}
+.card.sel{transform:translateY(-12px);border-color:#ffd54a;box-shadow:0 0 14px rgba(255,213,74,.85)}
+.card.small{width:34px;height:48px}
+.card.small .r{font-size:13px}
+.card.small .s{font-size:11px}
+
+#toast{position:fixed;left:50%;top:20%;transform:translate(-50%,-50%) scale(.9);background:rgba(0,0,0,.88);color:#ffd54a;padding:12px 20px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:999;border:1px solid #5c4a12;max-width:80vw;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-button{display:none!important}
+::-webkit-scrollbar-track{background:#0b1a11;border-radius:4px}
+::-webkit-scrollbar-thumb{background:#2e5c3e;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#4caf7d}
+*{scrollbar-width:thin;scrollbar-color:#2e5c3e #0b1a11}
+
+@media (max-width: 860px){
+  #gameScreen{
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr auto auto;
+    grid-template-areas:"header" "players" "mainArea" "stats" "log";
+    height: auto;min-height: 100vh;
+  }
+  #players{flex-direction:row;flex-wrap:wrap;justify-content:center;overflow:visible}
+  .pcard{width:auto;min-width:74px}
+  #center{min-height:160px}
+}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="loginbox">
+    <h1>👑</h1>
+    <h1> 國王與奴隸</h1>
+    <div class="tagline">平民起義 5 人局</div>
+    <input id="inpRoom" placeholder="房間號（自訂，例如 8888）" maxlength="16" autocomplete="off">
+    <input id="inpName" placeholder="你的名稱" maxlength="8" autocomplete="off">
+    <button class="btn primary" id="btnCreate">建立房間（當房主）</button>
+    <button class="btn" id="btnJoinRoom">加入房間</button>
+    <div id="loginMsg" class="msg"></div>
+  </div>
+</div>
+
+<div id="gameScreen" class="hidden">
+  <header>
+    <div>
+      <span class="roomtag">房間 <b id="roomLabel"></b></span>
+      <span id="roundLabel" style="margin-left:8px"></span>
+    </div>
+    <div>
+      <span id="reverseBadge" class="badge hidden">🔥 起義中：點數↕ 花色↕ 牌型↕</span>
+      <button class="mini" id="btnLeave">離開</button>
+    </div>
+  </header>
+
+  <div id="players"></div>
+
+  <main id="mainArea">
+    <div id="center">
+      <div id="comboLabel"></div>
+      <div id="lastPlayArea"></div>
+      <div id="centerMsg"></div>
+    </div>
+    <div id="myArea">
+      <div id="myInfo"></div>
+      <div id="myHand"></div>
+      <div id="actions"></div>
+    </div>
+  </main>
+
+  <div id="statsArea">
+    <div class="statBox">
+      <div class="statTitle">📊 積分表</div>
+      <div id="scoreList"></div>
+    </div>
+    <div class="statBox">
+      <div class="statTitle">📜 對戰紀錄</div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <div id="logBox"></div>
+</div>
+
+<script>
+/* =========================================================
+   常數（香港術語）
+   ========================================================= */
+const RANKS = ['3','4','5','6','7','8','9','10','J','Q','K','A','2'];
+const SUITS = ['♦','♣','♥','♠'];
+const SUIT_ORDER = {'♦':0,'♣':1,'♥':2,'♠':3};
+const TITLES = ['國王','貴族','平民','奴隸','雞'];
+const ICON = {'國王':'👑','貴族':'🎩','平民':'😐','奴隸':'⛓️','雞':'🐔'};
+const COMBO_NAMES = {
+  single:'單張', pair:'一對', triple:'三條',
+  straight:'順子', flush:'同花', fullhouse:'夫佬', four:'四條', straightflush:'同花順'
+};
+const FIVE_PRIORITY_NORMAL = { straight:1, flush:2, fullhouse:3, four:4, straightflush:5 };
+
+const HEARTBEAT_INTERVAL = 3000;
+const HEARTBEAT_TIMEOUT  = 9000;
+
+/* =========================================================
+   工具
+   ========================================================= */
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function cardStr(c){return c.r+c.s;}
+function hashStr(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
+function peerIdFor(room){return 'ksg-v8-'+hashStr(room);}
+
+let toastTimer;
+function toast(msg){
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t);}
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+/* =========================================================
+   全域狀態
+   ========================================================= */
+let G = null;
+let MYSTATE = null;
+let selected = new Set();
+const NET = { isHost:false, peer:null, conn:null, conns:[], myId:'host' };
+let ROOM='', MYNAME='', pidCounter=0;
+let heartbeatTimer = null;
+
+/* =========================================================
+   核心強度函式
+   ========================================================= */
+function st(r){ const i=RANKS.indexOf(r); return G.reversed?(12-i):i; }
+function suitOrd(s){ return G.reversed?(3-SUIT_ORDER[s]):SUIT_ORDER[s]; }
+function fivePriority(type){ const p=FIVE_PRIORITY_NORMAL[type]; return G.reversed?(6-p):p; }
+function getPlayer(pid){ return G.players.find(p=>p.id===pid); }
+
+function cmpCard(a,b){
+  const d = st(a.r)-st(b.r);
+  if(d) return d;
+  return suitOrd(a.s)-suitOrd(b.s);
+}
+function pickBest(hand,n){ return [...hand].sort((a,b)=>{
+  const d=st(b.r)-st(a.r); if(d) return d; return suitOrd(b.s)-suitOrd(a.s);
+}).slice(0,n); }
+function pickWorst(hand,n){ return [...hand].sort((a,b)=>{
+  const d=st(a.r)-st(b.r); if(d) return d; return suitOrd(a.s)-suitOrd(b.s);
+}).slice(0,n); }
+function makeDeck(){
+  const d=[];
+  for(const s of SUITS) for(const r of RANKS) d.push({id:r+s,r,s});
+  return d;
+}
+function log(msg){ G.log.push(msg); if(G.log.length>300) G.log.shift(); }
+
+/* =========================================================
+   順子 Key
+   ========================================================= */
+function straightKey(ranks){
+  const idxs = ranks.map(r => RANKS.indexOf(r)).sort((a,b)=>a-b);
+  if(idxs[4]-idxs[0]===4 && !idxs.includes(12)) return st(RANKS[idxs[0]]);
+  if(idxs.length===5 && idxs[0]===0 && idxs[1]===1 && idxs[2]===2 && idxs[3]===3 && idxs[4]===12) return st('2');
+  return null;
+}
+
+/* =========================================================
+   牌型識別
+   ========================================================= */
+function getCombo(cards){
+  const n=cards.length;
+  if(n===0) return null;
+  if(n===1) return { type:'single', size:1, key: st(cards[0].r), suit: suitOrd(cards[0].s), cards };
+  if(n===2){
+    if(cards[0].r !== cards[1].r) return null;
+    return { type:'pair', size:2, key: st(cards[0].r), suit: Math.max(...cards.map(c=>suitOrd(c.s))), cards };
+  }
+  if(n===3){
+    if(!(cards[0].r===cards[1].r && cards[1].r===cards[2].r)) return null;
+    return { type:'triple', size:3, key: st(cards[0].r), suit: Math.max(...cards.map(c=>suitOrd(c.s))), cards };
+  }
+  if(n===5){
+    const rankCount={}; cards.forEach(c=>rankCount[c.r]=(rankCount[c.r]||0)+1);
+    const counts = Object.values(rankCount).sort((a,b)=>b-a);
+    const isFlush = cards.every(c=>c.s===cards[0].s);
+    const ranks = [...new Set(cards.map(c=>c.r))];
+    let isStraight=false, sKey=null;
+    if(ranks.length===5){ sKey = straightKey(ranks); if(sKey!==null) isStraight=true; }
+    if(isFlush && isStraight) return { type:'straightflush', size:5, key:sKey, cards };
+    if(counts[0]===4){
+      const fourRank = Object.keys(rankCount).find(r=>rankCount[r]===4);
+      return { type:'four', size:5, key: st(fourRank), cards };
+    }
+    if(counts[0]===3 && counts[1]===2){
+      const threeRank = Object.keys(rankCount).find(r=>rankCount[r]===3);
+      return { type:'fullhouse', size:5, key: st(threeRank), cards };
+    }
+    if(isFlush){
+      const sorted = [...cards].sort(cmpCard).reverse();
+      return { type:'flush', size:5, ranks: sorted.map(c=>st(c.r)), suit: suitOrd(sorted[0].s), cards };
+    }
+    if(isStraight) return { type:'straight', size:5, key:sKey, cards };
+    return null;
+  }
+  return null;
+}
+
+function compareCombo(a,b){
+  if(!a||!b) return 0;
+  if(a.size!==b.size) return 0;
+  if(a.size===5 && a.type!==b.type) return fivePriority(a.type)-fivePriority(b.type);
+  if(a.type!==b.type) return 0;
+  if(a.type==='flush'){
+    for(let i=0;i<5;i++){ if(a.ranks[i]!==b.ranks[i]) return a.ranks[i]-b.ranks[i]; }
+    return (a.suit||0)-(b.suit||0);
+  }
+  if(a.key!==b.key) return a.key-b.key;
+  if(a.suit!==undefined && b.suit!==undefined) return a.suit-b.suit;
+  return 0;
+}
+
+/* =========================================================
+   遊戲流程
+   ========================================================= */
+function startRound(){
+  if(!NET.isHost) return;
+  if(G.players.length<2){ toast('至少需要 2 位玩家'); return; }
+
+  G.round++;
+  G.reversed = false;
+  G.lastPlay = null;
+  G.passed = new Set();
+  G.finishOrder = [];
+  G.phase = 'playing';
+  // 清除上一局的 rank（本局作廢後才需要）
+  G.players.forEach(p => { p.rank = 0; });
+
+  const deck = shuffle(makeDeck());
+  G.players.forEach(p=>p.hand=[]);
+  let i=0;
+  for(let k=0;k<10;k++) for(const p of G.players) p.hand.push(deck[i++]);
+  G.sealed = deck.slice(i);
+
+  if(G.round>1) doTribute();
+  G.players.forEach(p=>p.hand.sort(cmpCard));
+
+  let starter = null;
+  if(G.round===1){
+    for(const s of SUITS){
+      const p = G.players.find(pp=>pp.hand.some(c=>c.r==='3'&&c.s===s));
+      if(p){ starter=p.id; break; }
+    }
+  }else{
+    const king = G.players.find(p=>p.identity==='國王');
+    if(king) starter = king.id;
+  }
+  if(!starter || !getPlayer(starter)) starter = G.players[0].id;
+  G.turn = starter;
+
+  log(`—— 第 ${G.round} 局開始 ——`);
+  broadcast();
+}
+
+function transfer(from,to,cards){
+  const ids = new Set(cards.map(c=>c.id));
+  from.hand = from.hand.filter(c=>!ids.has(c.id));
+  to.hand.push(...cards.map(c=>({...c})));
+}
+function doTribute(){
+  const king    = G.players.find(p=>p.identity==='國王');
+  const noble   = G.players.find(p=>p.identity==='貴族');
+  const slave   = G.players.find(p=>p.identity==='奴隸');
+  const chicken = G.players.find(p=>p.identity==='雞');
+
+  if(chicken && king){
+    const give = pickBest(chicken.hand,2);
+    transfer(chicken,king,give);
+    log(`🐔 ${chicken.name} 進貢 ${give.map(cardStr).join(' ')} 給 👑 ${king.name}`);
+    const back = pickWorst(king.hand,2);
+    transfer(king,chicken,back);
+    log(`👑 ${king.name} 回贈 ${back.map(cardStr).join(' ')}`);
+  }
+  if(slave && noble){
+    const give = pickBest(slave.hand,1);
+    transfer(slave,noble,give);
+    log(`⛓️ ${slave.name} 進貢 ${give.map(cardStr).join(' ')} 給 🎩 ${noble.name}`);
+    const back = pickWorst(noble.hand,1);
+    transfer(noble,slave,back);
+    log(`🎩 ${noble.name} 回贈 ${back.map(cardStr).join(' ')}`);
+  }
+}
+
+function nextTurnId(fromId){
+  const n = G.players.length;
+  if(n===0) return null;
+  let i = G.players.findIndex(p=>p.id===fromId);
+  if(i<0) i=0;
+  for(let k=1;k<=n;k++){
+    const p = G.players[(i+k)%n];
+    if(p.hand.length>0) return p.id;
+  }
+  return null;
+}
+function shouldReset(){
+  if(!G.lastPlay) return false;
+  const active = G.players.filter(p=>p.hand.length>0);
+  const others = active.filter(p=>p.id!==G.lastPlay.pid);
+  if(others.length===0) return true;
+  return others.every(p=>G.passed.has(p.id));
+}
+function afterAction(){
+  const active = G.players.filter(p=>p.hand.length>0);
+  if(active.length<=1){ endRound(); return; }
+  const lpPid = G.lastPlay ? G.lastPlay.pid : null;
+  if(lpPid && shouldReset()){
+    const lp = getPlayer(lpPid);
+    G.lastPlay = null;
+    G.passed.clear();
+    if(lp && lp.hand.length>0) G.turn = lpPid;
+    else G.turn = nextTurnId(lpPid);
+  }else{
+    G.turn = nextTurnId(G.turn);
+  }
+}
+
+function hostPlay(pid, cardIds){
+  if(G.phase!=='playing'){ sendErr(pid,'現在不能出牌'); return; }
+  if(G.turn!==pid){ sendErr(pid,'還沒輪到你'); return; }
+  const p = getPlayer(pid);
+  if(!p) return;
+
+  const cards=[];
+  for(const id of cardIds){
+    const c = p.hand.find(x=>x.id===id);
+    if(!c){ sendErr(pid,'手牌中沒有這張牌'); return; }
+    cards.push(c);
+  }
+  if(cards.length===0){ sendErr(pid,'請先選牌'); return; }
+
+  const combo = getCombo(cards);
+  if(!combo){ sendErr(pid,'無效的牌型組合'); return; }
+
+  if(G.lastPlay){
+    const lastCombo = G.lastPlay.combo;
+    if(combo.size !== lastCombo.size){
+      sendErr(pid,`必須出 ${lastCombo.size} 張（${COMBO_NAMES[lastCombo.type]}）`); return;
+    }
+    if(compareCombo(combo, lastCombo) <= 0){
+      sendErr(pid,'出的牌無法壓過上一手'); return;
+    }
+  }
+
+  const ids = new Set(cardIds);
+  p.hand = p.hand.filter(c=>!ids.has(c.id));
+  G.lastPlay = { pid, cards: cards.map(c=>({...c})), combo };
+  G.passed.clear();
+  log(`${p.name} 出 ${cards.map(cardStr).join(' ')}（${COMBO_NAMES[combo.type]}）`);
+
+  if(p.hand.length===0){
+    G.finishOrder.push(pid);
+    const rank = G.finishOrder.length;
+    log(`　└ ${p.name} 第 ${rank} 名出完！`);
+    if(rank===1) checkRevolt(p);
+  }
+
+  afterAction();
+  broadcast();
+}
+
+function checkRevolt(p){
+  if(G.round<2) return;
+  if(G.reversed) return;
+  if(['平民','奴隸','雞'].includes(p.identity)){
+    G.reversed = true;
+    log(`🔥🔥 平民起義！${p.name}（${p.identity}）奪下第一！`);
+    log(`　└ 點數反轉：3 > 4 > … > A > 2`);
+    log(`　└ 花色反轉：♠ < ♥ < ♣ < ♦`);
+    log(`　└ 牌型反轉：同花順 < 四條 < 夫佬 < 同花 < 順子（順子最強）`);
+    log(`　└ 順子反轉：2-3-4-5-6 最弱，3-4-5-6-7 最強`);
+    G.players.forEach(pp=>pp.hand.sort(cmpCard));
+  }
+}
+
+function hostPass(pid){
+  if(G.phase!=='playing'){ sendErr(pid,'現在不能 PASS'); return; }
+  if(G.turn!==pid){ sendErr(pid,'還沒輪到你'); return; }
+  if(!G.lastPlay){ sendErr(pid,'自由出牌，必須出牌'); return; }
+  G.passed.add(pid);
+  log(`${getPlayer(pid).name} PASS`);
+  afterAction();
+  broadcast();
+}
+
+function endRound(){
+  const active = G.players.filter(p=>p.hand.length>0);
+  for(const p of active) G.finishOrder.push(p.id);
+
+  const results = [];
+  G.finishOrder.forEach((pid,i)=>{
+    const p = getPlayer(pid);
+    if(!p) return;
+    p.rank = i+1;
+    p.identity = TITLES[i] || '平民';
+    const addScore = 5 - i;
+    p.score = (p.score || 0) + addScore;
+    results.push({ id: pid, name: p.name, identity: p.identity, rank: i+1, addScore });
+  });
+
+  G.history.push({ round: G.round, results });
+  G.phase = 'roundEnd';
+  G.turn = null;
+  G.lastPlay = null;
+  log('—— 本局結束，身分已重新分封 ——');
+  broadcast();
+}
+
+/* =========================================================
+   ★★★ 玩家離線：直接移除 + 本局作廢（不計分、不記名次） ★★★
+   ========================================================= */
+function handlePlayerLeave(pid){
+  const p = getPlayer(pid);
+  if(!p) return;                 // 已經被移除
+
+  const wasPlaying = G.phase === 'playing';
+
+  // 遊戲進行中：本局直接作廢
+  if(wasPlaying){
+    log(`⚠️ ${p.name} 離線，本局作廢（不計分、不記名次）`);
+    G.phase = 'roundEnd';
+    G.turn = null;
+    G.lastPlay = null;
+    G.finishOrder = [];
+    G.passed.clear();
+    // 清除所有人本局的名次顯示
+    G.players.forEach(pp => { pp.rank = 0; });
+  }else{
+    log(`⚠️ ${p.name} 已離開房間`);
+  }
+
+  // 從玩家陣列移除
+  G.players = G.players.filter(pp => pp.id !== pid);
+  // 從連線列表移除
+  NET.conns = NET.conns.filter(c => c.pid !== pid);
+  // 清除 PASS 記錄
+  G.passed.delete(pid);
+
+  broadcast();
+}
+
+/* =========================================================
+   狀態打包 / 廣播
+   ========================================================= */
+function buildStateFor(pid){
+  const me = getPlayer(pid);
+  return {
+    phase: G.phase, round: G.round, reversed: G.reversed, turn: G.turn,
+    lastPlay: G.lastPlay ? {
+      pid: G.lastPlay.pid, cards: G.lastPlay.cards,
+      comboType: G.lastPlay.combo.type, comboSize: G.lastPlay.combo.size,
+      comboName: COMBO_NAMES[G.lastPlay.combo.type]
+    } : null,
+    log: G.log.slice(-40),
+    myId: pid,
+    sealed: G.phase==='roundEnd' ? G.sealed : null,
+    players: G.players.map(p=>({
+      id:p.id, name:p.name, handCount:p.hand.length,
+      identity:p.identity, rank:p.rank, score: p.score || 0,
+      isHost:p.isHost, isTurn: G.turn===p.id
+    })),
+    history: G.history.slice(-30),
+    you: me ? { id:me.id, hand:[...me.hand].sort(cmpCard) } : null
+  };
+}
+
+function broadcast(){
+  if(!NET.isHost) return;
+  for(const c of NET.conns){
+    try{ c.conn.send({t:'state', state: buildStateFor(c.pid)}); }catch(e){}
+  }
+  MYSTATE = buildStateFor(NET.myId);
+  render();
+}
+
+function sendErr(pid,msg){
+  if(pid===NET.myId){ toast(msg); return; }
+  const c = NET.conns.find(c=>c.pid===pid);
+  if(c){ try{ c.conn.send({t:'error', msg}); }catch(e){} }
+}
+
+/* =========================================================
+   心跳偵測
+   ========================================================= */
+function startHeartbeat(){
+  if(heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(()=>{
+    if(!NET.isHost || !G) return;
+    const now = Date.now();
+    let toRemove = [];
+
+    for(const c of NET.conns){
+      try{ c.conn.send({t:'ping'}); }catch(e){}
+    }
+
+    for(const p of G.players){
+      if(p.isHost) continue;
+      if(p.lastSeen && now - p.lastSeen > HEARTBEAT_TIMEOUT){
+        toRemove.push(p.id);
+      }
+    }
+
+    for(const pid of toRemove){
+      handlePlayerLeave(pid);
+    }
+  }, HEARTBEAT_INTERVAL);
+}
+function stopHeartbeat(){
+  if(heartbeatTimer){ clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+/* =========================================================
+   渲染
+   ========================================================= */
+function cardEl(c, small){
+  const d=document.createElement('div');
+  d.className = 'card' + (small?' small':'') + ((c.s==='♥'||c.s==='♦')?' red':'');
+  d.innerHTML = `<span class="r">${esc(c.r)}</span><span class="s">${esc(c.s)}</span>`;
+  return d;
+}
+function mkBtn(text, cls, fn){
+  const b=document.createElement('button');
+  b.textContent=text; b.className=cls; b.onclick=fn; return b;
+}
+
+function render(){
+  const s = MYSTATE;
+  const loginEl = document.getElementById('loginScreen');
+  const gameEl  = document.getElementById('gameScreen');
+
+  if(!s){ loginEl.classList.remove('hidden'); gameEl.classList.add('hidden'); return; }
+  loginEl.classList.add('hidden'); gameEl.classList.remove('hidden');
+
+  if(s.you) selected = new Set([...selected].filter(id=>s.you.hand.some(c=>c.id===id)));
+
+  document.getElementById('roomLabel').textContent = ROOM;
+  document.getElementById('roundLabel').textContent = s.round ? `第 ${s.round} 局` : '大廳';
+  document.getElementById('reverseBadge').classList.toggle('hidden', !s.reversed);
+
+  /* 玩家列 */
+  const pEl = document.getElementById('players');
+  pEl.innerHTML='';
+  for(const p of s.players){
+    const d=document.createElement('div');
+    d.className = 'pcard'
+      + (p.isTurn?' turn':'')
+      + (p.id===s.myId?' me':'')
+      + (p.handCount===0 && s.phase!=='lobby' ? ' dead':'');
+    d.innerHTML = `
+      <div class="pn">${esc(p.name)}${p.isHost?' <span class="hosttag">房</span>':''}</div>
+      <div class="pi">${p.identity ? (ICON[p.identity]+' '+p.identity) : (s.phase==='lobby'?'等待中':'—')}</div>
+      <div class="pc">${p.handCount} 張 · ${p.score||0} 分</div>`;
+    pEl.appendChild(d);
+  }
+
+  /* 出牌區 */
+  const lp = document.getElementById('lastPlayArea');
+  lp.innerHTML='';
+  const comboLabel = document.getElementById('comboLabel');
+  if(s.lastPlay){
+    for(const c of s.lastPlay.cards) lp.appendChild(cardEl(c,true));
+    comboLabel.textContent = `上一手：${s.lastPlay.comboName}（${s.lastPlay.comboSize} 張）`;
+  }else{
+    comboLabel.textContent = '';
+  }
+
+  const msgEl = document.getElementById('centerMsg');
+  if(s.phase==='lobby'){
+    msgEl.textContent = `等待玩家加入…（${s.players.length}/5）`;
+  }else if(s.phase==='roundEnd'){
+    const order = s.players.filter(p=>p.rank>0).sort((a,b)=>a.rank-b.rank);
+    if(order.length === 0){
+      msgEl.innerHTML = '⚠️ 本局作廢（玩家離線）';
+    }else{
+      msgEl.innerHTML = '本局名次：' + order.map(p=>`${p.rank}.${esc(p.name)}`).join('　');
+    }
+  }else if(s.phase==='playing'){
+    if(s.lastPlay){
+      const o = s.players.find(p=>p.id===s.lastPlay.pid);
+      msgEl.textContent = `${o?o.name:'?'} 出了 ${s.lastPlay.comboName}`;
+    }else{
+      const o = s.players.find(p=>p.id===s.turn);
+      msgEl.textContent = `自由出牌（${o?o.name:'?'}）`;
+    }
+  }
+
+  /* 我的手牌 */
+  const handEl = document.getElementById('myHand');
+  handEl.innerHTML='';
+  if(s.you){
+    for(const c of s.you.hand){
+      const el = cardEl(c,false);
+      if(selected.has(c.id)) el.classList.add('sel');
+      el.onclick = ()=>{
+        if(s.phase!=='playing' || s.turn!==s.myId) return;
+        if(selected.has(c.id)) selected.delete(c.id); else selected.add(c.id);
+        render();
+      };
+      handEl.appendChild(el);
+    }
+  }
+
+  /* 我的資訊 */
+  const me = s.players.find(p=>p.id===s.myId);
+  document.getElementById('myInfo').innerHTML =
+    me ? `我是 <b>${esc(me.name)}</b>${me.identity?` · ${ICON[me.identity]} ${me.identity}`:''}　·　累積 <b>${me.score||0}</b> 分` : '';
+
+  /* 按鈕 */
+  const act = document.getElementById('actions');
+  act.innerHTML='';
+  if(s.phase==='lobby'){
+    if(NET.isHost){
+      act.appendChild(mkBtn('開始遊戲','primary',()=>{
+        if(G.players.length<2){ toast('至少需要 2 位玩家'); return; }
+        startRound();
+      }));
+    }else{
+      const d=document.createElement('div'); d.className='waiting';
+      d.textContent='等待房主開始遊戲…'; act.appendChild(d);
+    }
+  }
+  else if(s.phase==='playing'){
+    const myTurn = s.turn===s.myId;
+    const playBtn = mkBtn('出牌','primary',doPlay);
+    playBtn.disabled = !myTurn;
+    const passBtn = mkBtn('PASS','ghost',doPass);
+    passBtn.disabled = !myTurn || !s.lastPlay;
+    act.appendChild(playBtn);
+    act.appendChild(passBtn);
+  }
+  else if(s.phase==='roundEnd'){
+    if(NET.isHost){
+      act.appendChild(mkBtn('下一局','primary',()=>startRound()));
+    }else{
+      const d=document.createElement('div'); d.className='waiting';
+      d.textContent='等待房主開始下一局…'; act.appendChild(d);
+    }
+  }
+
+  /* 積分表 */
+  const scoreList = document.getElementById('scoreList');
+  const sorted = [...s.players].sort((a,b)=>(b.score||0)-(a.score||0));
+  scoreList.innerHTML = sorted.map((p,i)=>{
+    let cls='';
+    if(i===0 && (p.score||0)>0) cls='gold';
+    else if(i===1 && (p.score||0)>0) cls='silver';
+    else if(i===2 && (p.score||0)>0) cls='bronze';
+    return `<div class="scoreRow ${cls}">
+      <span class="nm">${esc(p.name)}</span>
+      <span class="sc">${p.score||0}</span>
+    </div>`;
+  }).join('') || '<div class="emptyHist">沒有玩家</div>';
+
+  /* 對戰紀錄 */
+  const histList = document.getElementById('historyList');
+  if(!s.history || s.history.length===0){
+    histList.innerHTML = '<div class="emptyHist">尚未有對局紀錄</div>';
+  }else{
+    histList.innerHTML = s.history.slice().reverse().map(h=>{
+      const parts = h.results.map(r=>{
+        const ic = ICON[r.identity] || '·';
+        return `${ic}${esc(r.name)}<i>+${r.addScore}</i>`;
+      }).join(' ');
+      return `<div class="histRow"><span class="hr">第${h.round}局</span><span class="hp">${parts}</span></div>`;
+    }).join('');
+  }
+
+  /* 日誌 */
+  const lb = document.getElementById('logBox');
+  lb.innerHTML = s.log.map(x=>`<div>${esc(x)}</div>`).join('');
+  lb.scrollTop = lb.scrollHeight;
+}
+
+function doPlay(){
+  if(!MYSTATE || MYSTATE.phase!=='playing') return;
+  const ids=[...selected];
+  if(ids.length===0){ toast('請先選牌'); return; }
+  if(NET.isHost) hostPlay(NET.myId, ids);
+  else NET.conn.send({t:'play', cards: ids});
+}
+function doPass(){
+  if(!MYSTATE || MYSTATE.phase!=='playing') return;
+  if(NET.isHost) hostPass(NET.myId);
+  else NET.conn.send({t:'pass'});
+}
+
+/* =========================================================
+   網路
+   ========================================================= */
+function setLoginMsg(m){ document.getElementById('loginMsg').textContent = m || ''; }
+document.getElementById('btnCreate').onclick = ()=>enterRoom(true);
+document.getElementById('btnJoinRoom').onclick = ()=>enterRoom(false);
+document.getElementById('btnLeave').onclick = ()=>{
+  stopHeartbeat();
+  if(NET.peer) try{ NET.peer.destroy(); }catch(e){}
+  location.reload();
+};
+
+function enterRoom(asHost){
+  const room = document.getElementById('inpRoom').value.trim();
+  const name = document.getElementById('inpName').value.trim();
+  if(!room){ setLoginMsg('請輸入房間號'); return; }
+  if(!name){ setLoginMsg('請輸入你的名稱'); return; }
+  if(room.length>16){ setLoginMsg('房間號太長'); return; }
+  if(name.length>8){ setLoginMsg('名稱最多 8 個字'); return; }
+
+  ROOM = room; MYNAME = name;
+  setLoginMsg('連線中…');
+  if(asHost) initHost();
+  else initClient();
+}
+
+function initHost(){
+  NET.isHost = true;
+  NET.myId = 'host';
+  G = {
+    phase:'lobby', round:0,
+    players:[{ id:'host', name:MYNAME, hand:[], identity:'', rank:0, score:0, isHost:true, lastSeen:Date.now() }],
+    turn:null, lastPlay:null, passed:new Set(), reversed:false,
+    finishOrder:[], sealed:[], log:[], history:[]
+  };
+
+  NET.peer = new Peer(peerIdFor(ROOM), {debug:0});
+  NET.peer.on('open', ()=>{
+    setLoginMsg('');
+    log(`房間「${ROOM}」已建立，等待玩家加入…`);
+    broadcast();
+    startHeartbeat();
+  });
+  NET.peer.on('error', e=>{
+    if(e.type==='unavailable-id'){
+      setLoginMsg('這個房間號已經有人開了，換一個或改用「加入房間」');
+    }else{
+      setLoginMsg('連線錯誤：'+e.type+'（請確認網路後重試）');
+    }
+  });
+  NET.peer.on('connection', conn=>{
+    conn.on('data', msg=>hostHandle(conn,msg));
+    conn.on('close', ()=>{
+      const rec = NET.conns.find(c=>c.conn===conn);
+      if(!rec) return;
+      handlePlayerLeave(rec.pid);
+    });
+    conn.on('error', ()=>{});
+  });
+}
+
+function hostHandle(conn, msg){
+  if(msg.t==='join'){
+    if(G.players.length>=5){ conn.send({t:'error',msg:'房間已滿（5 人）'}); return; }
+    if(G.phase!=='lobby' && G.phase!=='roundEnd'){ conn.send({t:'error',msg:'遊戲進行中，無法加入'}); return; }
+    const id = 'p'+(++pidCounter);
+    conn._pid = id;
+    NET.conns.push({conn, pid:id});
+    G.players.push({
+      id, name:String(msg.name).slice(0,8), hand:[], identity:'', rank:0, score:0,
+      isHost:false, lastSeen: Date.now()
+    });
+    log(`${msg.name} 加入了房間`);
+    conn.send({t:'welcome', id});
+    broadcast();
+    return;
+  }
+  const pid = conn._pid;
+  if(!pid) return;
+  if(msg.t==='pong'){
+    const p = getPlayer(pid);
+    if(p) p.lastSeen = Date.now();
+    return;
+  }
+  if(!getPlayer(pid)) return;
+  if(msg.t==='play') hostPlay(pid, msg.cards||[]);
+  else if(msg.t==='pass') hostPass(pid);
+}
+
+function initClient(){
+  NET.isHost = false;
+  NET.peer = new Peer({debug:0});
+  NET.peer.on('open', ()=>{
+    const conn = NET.peer.connect(peerIdFor(ROOM), {reliable:true});
+    NET.conn = conn;
+    conn.on('open', ()=>{
+      setLoginMsg('');
+      conn.send({t:'join', name:MYNAME});
+    });
+    conn.on('data', msg=>{
+      if(msg.t==='state'){ MYSTATE = msg.state; render(); }
+      else if(msg.t==='error'){ toast(msg.msg); }
+      else if(msg.t==='welcome'){ NET.myId = msg.id; }
+      else if(msg.t==='ping'){
+        try{ conn.send({t:'pong'}); }catch(e){}
+      }
+    });
+    conn.on('close', ()=>{
+      toast('與房主的連線中斷了');
+      setLoginMsg('與房主的連線中斷了，請重新整理');
+    });
+    conn.on('error', ()=>{ setLoginMsg('連線失敗，請確認房間號是否正確'); });
+  });
+  NET.peer.on('error', e=>{
+    if(e.type==='peer-unavailable'){
+      setLoginMsg('找不到這個房間，請確認房間號（或請房主先建立房間）');
+    }else{
+      setLoginMsg('連線錯誤：'+e.type);
+    }
+  });
+}
+
+window.addEventListener('beforeunload', ()=>{
+  try{ if(NET.isHost) stopHeartbeat(); }catch(e){}
+});
+</script>
+</body>
+</html>
