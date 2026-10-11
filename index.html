@@ -852,16 +852,18 @@ function applyTribute(){
   const slave = G.players.find(p=>p.identity==='奴隸');
   const chicken = G.players.find(p=>p.identity==='雞');
 
-  // 1. 雞 → 國王（自動交出最大2張）
+  let exchanges = [];
+
+  // 1. 雞 → 國王（自動交出最大 2 張）
   if(chicken && king && G.tribute.give.chickenToKing){
     const ids = new Set(G.tribute.give.chickenToKing);
     const cards = chicken.hand.filter(c=>ids.has(c.id));
     chicken.hand = chicken.hand.filter(c=>!ids.has(c.id));
     king.hand.push(...cards);
-    log(`🐔 ${chicken.name} 進貢 ${cards.map(cardStr).join(' ')} 給 👑 ${king.name}`);
+    exchanges.push(`🐔 ${chicken.name} → 👑 ${king.name}`);
   }
 
-  // 2. 國王 → 雞（國王選的2張）
+  // 2. 國王 → 雞（國王選的 2 張）
   if(king && chicken && G.tribute.needSelect[king.id]){
     const sel = G.tribute.needSelect[king.id].selected;
     if(sel && sel.length){
@@ -869,20 +871,20 @@ function applyTribute(){
       const cards = king.hand.filter(c=>ids.has(c.id));
       king.hand = king.hand.filter(c=>!ids.has(c.id));
       chicken.hand.push(...cards);
-      log(`👑 ${king.name} 回贈 ${cards.map(cardStr).join(' ')} 給 🐔 ${chicken.name}`);
+      exchanges.push(`👑 ${king.name} → 🐔 ${chicken.name}`);
     }
   }
 
-  // 3. 奴隸 → 貴族（自動交出最大1張）
+  // 3. 奴隸 → 貴族（自動交出最大 1 張）
   if(slave && noble && G.tribute.give.slaveToNoble){
     const ids = new Set(G.tribute.give.slaveToNoble);
     const cards = slave.hand.filter(c=>ids.has(c.id));
     slave.hand = slave.hand.filter(c=>!ids.has(c.id));
     noble.hand.push(...cards);
-    log(`⛓️ ${slave.name} 進貢 ${cards.map(cardStr).join(' ')} 給 🎩 ${noble.name}`);
+    exchanges.push(`⛓️ ${slave.name} → 🎩 ${noble.name}`);
   }
 
-  // 4. 貴族 → 奴隸（貴族選的1張）
+  // 4. 貴族 → 奴隸（貴族選的 1 張）
   if(noble && slave && G.tribute.needSelect[noble.id]){
     const sel = G.tribute.needSelect[noble.id].selected;
     if(sel && sel.length){
@@ -890,11 +892,14 @@ function applyTribute(){
       const cards = noble.hand.filter(c=>ids.has(c.id));
       noble.hand = noble.hand.filter(c=>!ids.has(c.id));
       slave.hand.push(...cards);
-      log(`🎩 ${noble.name} 回贈 ${cards.map(cardStr).join(' ')} 給 ⛓️ ${slave.name}`);
+      exchanges.push(`🎩 ${noble.name} → ⛓️ ${slave.name}`);
     }
   }
 
+  // ★ 只顯示「已交換」不顯示牌面
+  log(`💰 已交換：${exchanges.join('、')}`);
   G.tribute = null;
+  G.tributeJustDone = Date.now();
 }
 
 function hostSubmitTribute(pid, cardIds){
@@ -941,6 +946,7 @@ function hostSubmitTribute(pid, cardIds){
    遊戲流程
    ========================================================= */
 function startRound(){
+  G.tributeJustDone = 0;
   if(!NET.isHost) return;
   const cfg = getModeConfig(G.mode);
   if(G.players.length < 2){toast('至少需要 2 位玩家');return;}
@@ -1521,23 +1527,27 @@ function render(){
 
   // 中央訊息
   const msgEl=document.getElementById('centerMsg');
+  const justDone = G && G.tributeJustDone && (Date.now() - G.tributeJustDone < 1500);
   if(s.phase==='lobby'){
     msgEl.textContent=`等待玩家加入…（${s.players.length}/${cfg.maxPlayers}）`;
   }else if(isTribute){
     if(s.tribute && s.tribute.isSelector){
       if(s.tribute.done){
-        msgEl.innerHTML = `✔ 已選擇 <b>${s.tribute.count}</b> 張回贈牌，等待其他玩家…`;
+        msgEl.innerHTML = `✔ 已確認回贈，等待其他玩家…`;
       } else {
-        msgEl.innerHTML = `💰 進貢階段：請選擇 <b>${s.tribute.count}</b> 張牌回贈給 <b>${esc(s.tribute.targetName)}</b><br><span style="font-size:11px;color:var(--text3)">（已選 ${selected.size}/${s.tribute.count}）</span>`;
+        msgEl.innerHTML = `💰 請選擇 <b>${s.tribute.count}</b> 張牌回贈給 <b>${esc(s.tribute.targetName)}</b><br><span style="font-size:11px;color:var(--text3)">（已選 ${selected.size}/${s.tribute.count}）</span>`;
       }
     } else {
       const names = s.tribute && s.tribute.waiting ? s.tribute.waiting : [];
       if(names.length){
-        msgEl.innerHTML = `💰 進貢階段：等待 <b>${names.map(esc).join('、')}</b> 選擇回贈牌…`;
+        msgEl.innerHTML = `💰 等待 <b>${names.map(esc).join('、')}</b> 選擇回贈牌…`;
       } else {
         msgEl.textContent = '💰 進貢階段';
       }
     }
+  }else if(justDone && isPlaying && !s.lastPlay){
+    // ★ 交換完成後短暫顯示
+    msgEl.innerHTML = '✔ 已交換，開始出牌！';
   }else if(s.phase==='roundEnd'){
     const order=s.players.filter(p=>p.rank>0).sort((a,b)=>a.rank-b.rank);
     if(order.length===0) msgEl.innerHTML='⚠️ 本局作廢（玩家離線）';
@@ -2022,6 +2032,7 @@ function enterRoom(asHost){
 
 /* ---------- 房主 ---------- */
 function initHost(){
+  tributeJustDone: 0,
   NET.isHost=true;NET.myId='host';
   const cfg = getModeConfig(selectedMode);
   G={
