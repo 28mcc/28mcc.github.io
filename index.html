@@ -1045,6 +1045,10 @@ function checkRevolt(p){
   const cfg = getModeConfig(G.mode);
   if(cfg.bottomClasses.includes(p.identity)){
     G.reversed=true;
+    if(G.lastPlay && G.lastPlay.cards){
+      const newCombo = getCombo(G.lastPlay.cards);
+      if(newCombo) G.lastPlay.combo = newCombo;
+    }
     log(`🔥🔥 平民起義！${p.name}（${p.identity}）奪下第一！`);
     log(`　└ 點數反轉：3 > 4 > … > A > 2`);
     log(`　└ 花色反轉：♠ < ♥ < ♣ < ♦`);
